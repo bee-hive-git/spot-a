@@ -25,7 +25,6 @@ function isDual(c: CaseItem): c is CaseDual {
 }
 
 export function CasosClientes() {
-  // state
   const [idx, setIdx] = useState(0);
   const next = useCallback(() => setIdx((i) => (i + 1) % CASES.length), []);
   const prev = useCallback(() => setIdx((i) => (i - 1 + CASES.length) % CASES.length), []);
@@ -48,14 +47,13 @@ export function CasosClientes() {
       prev.endsWith(".webp") ? prev.replace(/\.webp$/i, ".png") : prev.replace(/\.png$/i, ".webp")
     );
   };
-
   const [imgRatio, setImgRatio] = useState<number | null>(null);
   const onLoaded = (img: HTMLImageElement) => setImgRatio(img.naturalWidth / img.naturalHeight);
 
   // breakpoints
-  const [isMobile, setIsMobile] = useState(false);          // <768
-  const [isTablet, setIsTablet] = useState(false);          // 768–1023
-  const [isMidDesk, setIsMidDesk] = useState(false);        // 1024–1535 (iPad Air → abaixo do desktop cheio)
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+  const [isMidDesk, setIsMidDesk] = useState(false);
   const [slideGap, setSlideGap] = useState(16);
   useEffect(() => {
     const upd = () => {
@@ -107,7 +105,6 @@ export function CasosClientes() {
     else if (dx < -threshold) next();
   };
 
-  // track
   const translateX = -idx * (vw() + slideGap) + dragPx;
   const trackStyle: React.CSSProperties = {
     transform: `translate3d(${translateX}px, 0, 0)`,
@@ -115,30 +112,25 @@ export function CasosClientes() {
     willChange: "transform",
   };
 
-  // escala/offset progressivo: 1024→1535 mantém modelo do iPad Air; ≥1536 volta ao desktop cheio
   const w = typeof window !== "undefined" ? window.innerWidth : 1536;
   const tMid = isMidDesk ? Math.min(Math.max((w - 1024) / (1535 - 1024), 0), 1) : 0;
-  const scaleMid = 0.85 + tMid * (0.98 - 0.85); // encolhe no 1024 e relaxa até perto do desktop
+  const scaleMid = 0.85 + tMid * (0.98 - 0.85);
   const scale = isTablet ? 0.86 : isMidDesk ? scaleMid : 1;
   const scaleTransform: React.CSSProperties =
     isTablet || isMidDesk ? { transform: `scale(${scale})`, transformOrigin: "center top" } : {};
-
-  // largura do viewport (max-width) progressiva para abrir espaço às setas
   const viewportMaxStyle: React.CSSProperties | undefined = isMidDesk
     ? { maxWidth: `${Math.round(940 + tMid * (1200 - 940))}px` }
     : undefined;
 
-  // fontes levemente menores no mid (harmoniza com o scale)
   const h1Size = isMidDesk ? `${Math.round(38 + tMid * (46 - 38))}px` : undefined;
   const pSize = isMidDesk ? `${Math.round(16 + tMid * (18 - 16))}px` : undefined;
   const pLine = isMidDesk ? `${Math.round(26 + tMid * (30 - 26))}px` : undefined;
 
-  // setas mais afastadas no mid (60px→76px)
   const arrowOffset = isMidDesk ? Math.round(60 + tMid * (76 - 60)) : 76;
 
   return (
     <section id="casos-clientes" className="relative overflow-visible bg-[#010510]">
-      <div className="relative z-10 mx-auto max-w-[1350px] px-5 pt-20 pb-20 md:px-6 md:pt-20 md:pb-24 lg:px-8 lg:pt-28 lg:pb-28">
+      <div className="relative z-10 mx-auto max-w-[1350px] px-5 pt-12 pb-16 md:px-6 md:pt-16 md:pb-20 lg:px-8 lg:pt-20 lg:pb-24">
         <div style={scaleTransform}>
           {/* título */}
           <h1
@@ -159,7 +151,7 @@ export function CasosClientes() {
           </p>
 
           {/* carrossel */}
-          <div className="mt-10 md:mt-12 lg:mt-16">
+          <div className="mt-8 md:mt-10 lg:mt-12">
             <div className="relative mx-auto w-full md:max-w-[900px] lg:max-w-[1250px]" style={viewportMaxStyle}>
               {/* viewport */}
               <div
@@ -202,7 +194,9 @@ export function CasosClientes() {
                       {/* legendas */}
                       {isDual(c) ? (
                         <div
-                          className={`mx-auto mt-5 w-full md:max-w-[900px] lg:max-w-[1250px] text-[#E6ECF8] font-semibold ${isMobile ? "flex flex-col items-center gap-2 text-[15px]" : "flex items-center justify-between px-1 text-[16px] md:text-[17px] lg:text-[20px]"}`}
+                          className={`mx-auto mt-5 w-full md:max-w-[900px] lg:max-w-[1250px] text-[#E6ECF8] font-semibold ${
+                            isMobile ? "flex flex-col items-center gap-2 text-[15px]" : "flex items-center justify-between px-1 text-[16px] md:text-[17px] lg:text-[20px]"
+                          }`}
                         >
                           {isMobile ? (
                             <>
@@ -217,7 +211,11 @@ export function CasosClientes() {
                           )}
                         </div>
                       ) : (
-                        <p className={`mx-auto mt-5 w-full md:max-w-[900px] lg:max-w-[1250px] text-center text-[#E6ECF8] font-semibold ${isMobile ? "text-[15px]" : "text-[16px] md:text-[17px] lg:text-[20px]"}`}>
+                        <p
+                          className={`mx-auto mt-5 w-full md:max-w-[900px] lg:max-w-[1250px] text-center text-[#E6ECF8] font-semibold ${
+                            isMobile ? "text-[15px]" : "text-[16px] md:text-[17px] lg:text-[20px]"
+                          }`}
+                        >
                           {c.caption}
                         </p>
                       )}
@@ -226,7 +224,7 @@ export function CasosClientes() {
                 </div>
               </div>
 
-              {/* setas (md+: aparecem; mobile: escondidas) */}
+              {/* setas */}
               <button
                 type="button"
                 aria-label="Anterior"
