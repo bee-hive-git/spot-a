@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root{
+  /* TUNÁVEIS */
+  --grid-size: 48px;                      /* espaçamento dos quadrados */
+  --grid-line: rgba(255,255,255,0.06);    /* linhas da grade */
+  --grid-dot: rgba(255,255,255,0.04);     /* pontinhos opcionais */
+  --beam-color: rgba(30,110,255,0.22);    /* feixe de luz */
+  --beam-x: 18%;
+  --beam-y: 16%;
+  --beam-size: 46vmax;
+  --flow-color: rgba(243,197,61,0.55);    /* cor da “linha de dados” */
+  --flow-speed: 22s;                      /* velocidade da varredura */
+}
+
+/* grade de quadrados + layers animadas */
+.bg-grid{
+  position: relative;
+  background:
+    /* pontinhos bem sutis (opcional, pode remover) */
+    radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/var(--grid-size) var(--grid-size),
+    /* linhas horizontais e verticais */
+    linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/var(--grid-size) var(--grid-size),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0/var(--grid-size) var(--grid-size);
+}
+
+/* feixe de luz (glow) */
+.bg-grid::before{
+  content:"";
+  position:absolute; inset:-20%;
+  background:
+    radial-gradient(
+      circle at var(--beam-x) var(--beam-y),
+      var(--beam-color) 0%,
+      rgba(0,0,0,0) 60%
+    );
+  filter: blur(14px);
+  pointer-events:none;
+  animation: beam-move 16s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+}
+
+/* “linha de dados” varrendo a tela */
+.bg-grid::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    linear-gradient(90deg,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0) 40%,
+      var(--flow-color) 50%,
+      rgba(0,0,0,0) 60%,
+      rgba(0,0,0,0) 100%);
+  pointer-events:none;
+  mix-blend-mode: screen;
+  animation: scan var(--flow-speed) linear infinite;
+  opacity:.9;
+}
+
+/* faíscas sutis em alguns quadrados */
+.bg-grid-sparkles{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(rgba(243,197,61,.12) 1px, transparent 1px) 0 0/var(--grid-size) var(--grid-size);
+  animation: sparkle 3s steps(12) infinite;
+  mix-blend-mode: screen;
+  pointer-events:none;
+  opacity:.5;
+}
+
+/* trilha vetorial opcional (stroke animado) */
+.data-path{
+  stroke: rgba(243,197,61,.85);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 14 12;
+  vector-effect: non-scaling-stroke;
+  fill: none;
+  filter: drop-shadow(0 0 6px rgba(243,197,61,.45));
+  animation: dash 9s linear infinite;
+}
+
+@keyframes scan{
+  0%{ transform: translateX(-100%); }
+  100%{ transform: translateX(100%); }
+}
+@keyframes beam-move{
+  0%  { --beam-x: 12%; --beam-y: 18%; }
+  100%{ --beam-x: 74%; --beam-y: 34%; }
+}
+@keyframes sparkle{
+  50% { background-position: calc(var(--grid-size)/2) calc(var(--grid-size)/2); }
+}
+@keyframes dash{
+  to { stroke-dashoffset: -240; }
+}
+
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* reset overflow lateral */
+html,
+body,
+#__next {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 48px 48px, 48px 48px;
+  background-position: -1px -1px, -1px -1px;
+}
+
