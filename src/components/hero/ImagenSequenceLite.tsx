@@ -1,6 +1,6 @@
 "use client";
 import * as THREE from "three";
-import { useThree, useFrame } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 
 type Orient = "none" | "flipY" | "flipX" | "rotate180";
@@ -14,9 +14,12 @@ type Props = {
   dir: string;
   base: string;
   pad?: number;
-  ext?: "webp" | "png" | "jpg";
+  ext?: "webp" | "png" | "jpg"; // primary extension (default)
+  extCandidates?: ("webp" | "png" | "jpg")[]; // optional fallback chain
   start?: number;
   progress?: number;      // 0..1 (scrub)
+  // Quando presente, multiplica o range de scroll por "loops" e faz wrap (p*loops % 1)
+  loops?: number;         // default 1 = sem repetição; 2+ = repete durante o scroll
   visible?: boolean;
   active?: boolean;       // loop
   renderOrder?: number;
@@ -35,8 +38,10 @@ export default function ImagenSequenceLite({
   base,
   pad = 3,
   ext = "webp",
+  extCandidates,
   start = 1,
   progress,
+  loops = 1,
   visible = true,
   active = true,
   renderOrder = 0,
@@ -53,14 +58,15 @@ export default function ImagenSequenceLite({
   const timeRef = useRef(0);
   const cacheRef = useRef<Map<number, CacheEntry>>(new Map());
   const aliveRef = useRef(true);
+  const inflightRef = useRef<Map<number, AbortController>>(new Map());
 
   // URLs dos frames
   const urls = useMemo(
     () =>
       Array.from({ length: count }, (_, i) =>
-        `${dir}/${base}${String(start + i).padStart(pad, "0")}.${ext}`
+        `${dir}/${base}${String(start + i).padStart(pad, "0")}`
       ),
-    [count, dir, base, pad, ext, start]
+    [count, dir, base, pad, start]
   );
 
   useEffect(() => {
@@ -75,6 +81,8 @@ export default function ImagenSequenceLite({
         } catch {}
       });
       cacheRef.current.clear();
+      inflightRef.current.forEach((c) => { try { c.abort(); } catch {} });
+      inflightRef.current.clear();
     };
   }, []);
 
@@ -125,28 +133,59 @@ export default function ImagenSequenceLite({
 
 
   // ====== Loader LRU ======
-  async function loadTexture(idx: number): Promise<THREE.Texture | null> {
+  // detecta qualidade da conexão para ajustar janela de prefetch
+  function getPrefetchWindow(): number {
+    const conn = (navigator as any).connection?.effectiveType as string | undefined;
+    if (!conn) return 1; // default conservador
+    if (conn.includes("2g")) return 1;
+    if (conn.includes("3g")) return 1;
+    return 2; // 4g ou melhor
+  }
+
+  async function loadTexture(idx: number, isPrefetch: boolean = false): Promise<THREE.Texture | null> {
     if (!aliveRef.current) return null;
     const c = cacheRef.current;
     const hit = c.get(idx);
     if (hit) { c.delete(idx); c.set(idx, hit); return hit.tex; }
-
-    const url = urls[idx];
+    const name = urls[idx];
+    const candidates = (extCandidates && extCandidates.length > 0) ? extCandidates : [ext];
+    let tex: THREE.Texture | null = null;
+    // limita concorrência durante prefetch para evitar excesso de requisições
+    const PREFETCH_CONCURRENCY_LIMIT = 1;
+    if (isPrefetch && inflightRef.current.size >= PREFETCH_CONCURRENCY_LIMIT) {
+      return null;
+    }
+    const ac = new AbortController();
+    inflightRef.current.set(idx, ac);
     try {
-      let tex: THREE.Texture;
-      if ("createImageBitmap" in window) {
-        const res = await fetch(url, { cache: "force-cache" });
-        const blob = await res.blob();
-        const bmp = await createImageBitmap(blob);
-        tex = new THREE.Texture(bmp);
-        (tex as THREE.Texture & { __bmp?: ImageBitmap }).__bmp = bmp;
-      } else {
-        const img = await new Promise<HTMLImageElement>((ok, err) => {
-          const im = new Image(); im.onload = () => ok(im); im.onerror = err; im.src = url;
-        });
-        tex = new THREE.Texture(img);
-        (tex as THREE.Texture & { __img?: HTMLImageElement }).__img = img;
+      // tenta nas extensões em ordem
+      for (const ex of candidates) {
+        const url = `${name}.${ex}`;
+        try {
+          if ("createImageBitmap" in window) {
+            const res = await fetch(url, { cache: "force-cache", signal: ac.signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const bmp = await createImageBitmap(blob);
+            tex = new THREE.Texture(bmp);
+            (tex as THREE.Texture & { __bmp?: ImageBitmap }).__bmp = bmp;
+          } else {
+            const img = await new Promise<HTMLImageElement>((ok, err) => {
+              const im = new Image(); im.onload = () => ok(im); im.onerror = err; im.src = url;
+            });
+            tex = new THREE.Texture(img);
+            (tex as THREE.Texture & { __img?: HTMLImageElement }).__img = img;
+          }
+          // sucesso nesta extensão
+          break;
+        } catch (e) {
+          tex = null; // tenta próxima extensão
+          continue;
+        }
       }
+
+      if (!tex) return null;
+
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.flipY = false; // controlamos flip via orient
       tex.magFilter = THREE.LinearFilter;
@@ -166,7 +205,7 @@ export default function ImagenSequenceLite({
     } catch {
       return null;
     }
-  }
+    }
 
   // ====== Aplica frame + orientação ======
   async function showFrame(idx: number) {
@@ -203,30 +242,51 @@ export default function ImagenSequenceLite({
     }
   }
 
-  function prefetch(idx: number) {
-    const n = Math.min(count - 1, idx + 1);
-    if (!cacheRef.current.has(n)) void loadTexture(n);
+  // prefetch inteligente com janela adaptativa
+  function prefetchWindowFrom(idx: number) {
+    const win = getPrefetchWindow();
+    for (let k = 1; k <= win; k++) {
+      const n = Math.min(count - 1, idx + k);
+      if (!cacheRef.current.has(n) && !inflightRef.current.has(n)) void loadTexture(n, true);
+    }
   }
 
   // ====== Scrub (scroll) ======
   useEffect(() => {
     if (typeof progress !== "number") return;
-    const p = progress;
-    const idx = Math.min(count - 1, Math.max(0, Math.floor(p * (count - 1))));
+    // Quando loops == 1, NÃO faz wrap — usa o último frame no final do scroll.
+    const totalLoops = Math.max(1, Math.floor(loops));
+    const pClamped = Math.min(1, Math.max(0, progress));
+    const pEff = totalLoops > 1
+      ? ((pClamped * totalLoops) % 1) // wrap apenas se loops>1
+      : pClamped;                      // sem wrap: 0..1 inteiro
+    const idx = Math.min(count - 1, Math.max(0, Math.floor(pEff * (count - 1) + 0.00001)));
     showFrame(idx);
-    prefetch(idx);
+    prefetchWindowFrom(idx);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progress, count]);
+  }, [progress, loops, count]);
 
-  // ====== Loop ======
-  useFrame((_, dt) => {
+  // ====== Loop com timer (frameloop="demand") ======
+  useEffect(() => {
     if (typeof progress === "number") return; // se tem scrub, não loopeia
     if (!active) return;
-    timeRef.current = (timeRef.current + fps * dt) % count;
-    const idx = Math.floor(timeRef.current);
-    showFrame(idx);
-    prefetch(idx);
-  });
+
+    const intervalMs = Math.max(1000 / fps, 16);
+    let id: ReturnType<typeof setInterval> | null = null;
+
+    const tick = () => {
+      if (!aliveRef.current) return;
+      if (document.hidden) return;
+      // avança 1 frame por tick
+      const next = (Math.floor(timeRef.current) + 1) % count;
+      timeRef.current = next;
+      showFrame(next);
+      prefetchWindowFrom(next);
+    };
+
+    id = setInterval(tick, intervalMs);
+    return () => { if (id) clearInterval(id); };
+  }, [progress, active, fps, count]);
 
   // mantém montado (evita flicker); controla só visibility
   return (

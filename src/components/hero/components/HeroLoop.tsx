@@ -16,11 +16,13 @@ export default function HeroLoop({ visible, active, orient = "flipY", fit = "con
   return (
     <ImageSequenceLite
       count={83}
-      fps={60}
+      fps={18}
       dir="/AnimationHero/seq-loop"
       base="HERO_LOOP"
       pad={3}
       ext="webp"
+      extCandidates={["webp","png"]}
+      maxCache={2}
       start={1}
       /* ...suas props atuais... */
       visible={visible}

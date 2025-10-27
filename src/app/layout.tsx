@@ -24,6 +24,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Preload dos primeiros frames das sequências usadas no fluxo de scroll */}
+        <link rel="preload" as="image" href="/AnimationHero/seq-loop/HERO_LOOP001.webp" type="image/webp" />
+        <link rel="preload" as="image" href="/AnimationHero/seq-scroll/HERO_QUEDA001.webp" type="image/webp" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

@@ -4,8 +4,7 @@ import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import HeroLoop from "./components/HeroLoop";
-import HeroQuedaScroll from "./components/HeroQuedaScroll";
+import HeroScrollComposite from "./components/HeroScrollComposite";
 import HeroStats from "./components/HeroStats";
 
 // ===== Config da sequência =====
@@ -135,7 +134,8 @@ export default function Hero() {
     return () => ctx?.revert();
   }, [rangePct, fadeEndPct, scrubSmooth, showMarkers, hideGrid]);
 
-  const showScroll = scrollP > 0.001;
+  // Exibimos apenas a sequência de scroll (com looping integrado). Sem animação de loop separada.
+  const showScroll = true;
 
   return (
     <section
@@ -149,7 +149,7 @@ export default function Hero() {
         className="absolute inset-0 -z-10"
         style={{
           backgroundColor: "#010510",
-          backgroundImage: 'url("/AnimationHero/HERO_SPOT.PNG")',
+          backgroundImage: 'image-set(url("/AnimationHero/HERO_SPOT.webp") type("image/webp"), url("/AnimationHero/HERO_SPOT.png") type("image/png"))',
           backgroundRepeat: "no-repeat",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -184,16 +184,15 @@ export default function Hero() {
             top: 0,
             left: 0
           }}
-          dpr={[1, 1.4]}
-          frameloop={showScroll ? "demand" : "always"}
-          gl={{ alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: "high-performance" }}
+          dpr={[1, 1.2]}
+          frameloop={"demand"}
+          gl={{ alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: "low-power" }}
           camera={{ position: [0, 0, 9.5], fov: 50 }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.NoToneMapping;
           }}
         >
-          <HeroLoop visible={!showScroll} active={!showScroll} {...seqProps} />
-          <HeroQuedaScroll progress={scrollP} visible={showScroll} {...seqPropsScroll} />
+          <HeroScrollComposite progress={scrollP} visible={showScroll} {...seqPropsScroll} />
         </Canvas>
       </div>
 
@@ -236,16 +235,34 @@ export default function Hero() {
               color: "transparent",
             }}
           >
-            <span className="block">Tráfego Pago para Atrair Leads</span>
-            <span className="block">Qualificados e Escalar Vendas</span>
+            {/* Mobile: cortes pontuais em 3 linhas para melhor proporção */}
+            <span className="sm:hidden">
+              <span className="block">Tráfego Pago para Atrair</span>
+              <span className="block">Leads Qualificados</span>
+              <span className="block">e Escalar Vendas</span>
+            </span>
+            {/* Desktop/Tablet: mantém 2 linhas */}
+            <span className="hidden sm:block">
+              <span className="block">Tráfego Pago para Atrair Leads</span>
+              <span className="block">Qualificados e Escalar Vendas</span>
+            </span>
           </h1>
 
           <p
-            className="mt-4 sm:mt-5 md:mt-6 text-white/90 px-3 sm:px-4 max-w-[90%] sm:max-w-[80%] md:max-w-full"
-            style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "clamp(13px, 3.2vw, 19px)", lineHeight: "135%" }}
+            className="mt-4 sm:mt-5 md:mt-6 text-white/90 px-3 sm:px-4 max-w-[92%] sm:max-w-[80%] md:max-w-full"
+            style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "clamp(14px, 3.4vw, 19px)", lineHeight: "138%" }}
           >
-            <span className="block">Transformamos marcas em potências digitais com estratégias de tráfego pago</span>
-            <span className="block">personalizadas, foco em leads qualificados e execução de alta performance.</span>
+            {/* Mobile: quebras mais naturais em 3 linhas curtas */}
+            <span className="sm:hidden">
+              <span className="block">Transformamos marcas em potências digitais</span>
+              <span className="block">com estratégias de tráfego pago personalizadas,</span>
+              <span className="block">foco em leads qualificados e alta performance.</span>
+            </span>
+            {/* Desktop/Tablet: mantém 2 linhas */}
+            <span className="hidden sm:block">
+              <span className="block">Transformamos marcas em potências digitais com estratégias de tráfego pago</span>
+              <span className="block">personalizadas, foco em leads qualificados e execução de alta performance.</span>
+            </span>
           </p>
 
           {/* CTAs */}

@@ -109,37 +109,34 @@ const HeroStats: React.FC<HeroStatsProps> = ({ isVisible, className = "", id }) 
         </div>
       </div>
 
-      {/* Conteúdo lateral ao cubo */}
-      <div className="flex flex-col items-center justify-center gap-8 lg:flex-row lg:gap-16">
-        {/* Espaço para o cubo (invisível, apenas para layout) - Centralizado no mobile */}
-        <div className="w-48 h-48 lg:w-64 lg:h-64 flex-shrink-0 mx-auto lg:mx-0" />
-        
-        {/* Conteúdo textual */}
-        <div 
+      {/* Bloco de conteúdo centralizado (sem offset lateral do cubo) */}
+      <div className="flex flex-col items-center justify-center gap-8">
+        {/* Conteúdo textual centralizado */}
+        <div
           className={`
-            max-w-md text-center lg:text-left transition-all duration-800 delay-900 ease-out
-            ${showStats ? 'opacity-100 translate-x-0' : 'opacity-0 lg:translate-x-8'}
+            max-w-2xl text-center transition-all duration-800 delay-900 ease-out mx-auto
+            ${showStats ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-0'}
           `}
         >
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
             Como funciona?
           </h2>
-          
+
           <p className="text-base sm:text-lg text-white/80 mb-8 leading-relaxed">
-            Não basta atrair tráfego. O que você precisa é atrair as pessoas certas, 
+            Não basta atrair tráfego. O que você precisa é atrair as pessoas certas,
             no momento certo, com a mensagem certa, garantindo mais conversões e ROI.
           </p>
-          
+
           <Link
             href="#vender"
             className={`
-              group relative inline-flex h-12 sm:h-[52px] w-[46%] sm:w-[228px] items-center justify-center rounded-[33.9px]
+              group relative inline-flex h-12 sm:h-[52px] items-center justify-center rounded-[33.9px]
               bg-[linear-gradient(180deg,_#E5AC02_0.96%,_rgba(78,58,0,0.89)_100.96%)]
               sm:bg-[linear-gradient(180deg,_#000000_0.96%,_rgba(25,25,25,0.89)_100.96%)]
               shadow-[inset_0px_0px_11.2px_1.41px_#F3C53D]
               sm:shadow-[inset_0px_0px_4.42px_2.26px_#F3C53D]
               backdrop-blur-[17.6px] sm:backdrop-blur-[24px]
-              pl-6 pr-12 outline-none transition-all duration-500 delay-1100 ease-out
+              px-6 sm:px-7 md:px-8 outline-none transition-all duration-500 delay-1100 ease-out mx-auto
               hover:brightness-110 hover:ring-2 hover:ring-[#F3C53D]/35 hover:border-transparent
               hover:bg-[linear-gradient(83.94deg,_#CA9700_-5.76%,_#765802_93.06%)]
               sm:hover:bg-[linear-gradient(83.94deg,_#CA9700_-5.76%,_#765802_93.06%)]

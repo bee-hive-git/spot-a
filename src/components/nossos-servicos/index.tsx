@@ -28,6 +28,23 @@ export default function HeroSection() {
     mobileScale: 1,
     mobileOffsetX: 0,
     mobileOffsetY: 0,
+    // Navegação infinita + WhatsApp CTA
+    enableWheelLoop: true,
+    enableArrowKeys: true,
+    itemCount: 6, // ajuste conforme a quantidade real de serviços
+    initialIndex: 0,
+    riveIndexInputName: "index", // ajuste se seu State Machine usar outro nome
+    whatsappEnabled: true,
+    // Se não informarmos um número, o link abre o WhatsApp com a mensagem e você escolhe o contato
+    // Exemplo para ativar com número: whatsappNumber: "5581XXXXXXXXX",
+    whatsappMessageByIndex: [
+      "Olá! Tenho interesse em META ADS da Spot-A.",
+      "Olá! Tenho interesse em YOUTUBE ADS da Spot-A.",
+      "Olá! Tenho interesse nesse serviço da Spot-A.",
+      "Olá! Tenho interesse nesse serviço da Spot-A.",
+      "Olá! Tenho interesse nesse serviço da Spot-A.",
+      "Olá! Tenho interesse nesse serviço da Spot-A.",
+    ],
   };
 
   return (
@@ -62,6 +79,14 @@ export default function HeroSection() {
             desktopOffsetY={riveProps.desktopOffsetY}
             mobileOffsetX={riveProps.mobileOffsetX}
             mobileOffsetY={riveProps.mobileOffsetY}
+            enableWheelLoop={riveProps.enableWheelLoop}
+            enableArrowKeys={riveProps.enableArrowKeys}
+            itemCount={riveProps.itemCount}
+            initialIndex={riveProps.initialIndex}
+            riveIndexInputName={riveProps.riveIndexInputName}
+            whatsappEnabled={riveProps.whatsappEnabled}
+            // whatsappNumber={"5581XXXXXXXXX"} // opcional: ative com seu número real
+            whatsappMessageByIndex={riveProps.whatsappMessageByIndex}
             className="w-full h-full"
           />
         </div>
