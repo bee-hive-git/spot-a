@@ -11,9 +11,10 @@ import Rodape from "@/components/rodape";
 import { Leva } from "leva";
 
 export default function Page() {
+  const isDev = process.env.NODE_ENV === "development";
   return (
     <main>
-      <Leva />
+      {isDev && <Leva />}
       <Hero />
       <NossoProcesso />
       <Diferenciais />
