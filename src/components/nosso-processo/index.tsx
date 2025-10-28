@@ -23,7 +23,6 @@ export default function HeroSection() {
           relative
           w-full
           mx-auto
-          md:max-w-[1920px]
           aspect-[430/1454]      /* mobile artboard original */
           md:aspect-[1920/1181]  /* desktop artboard original */
         "
