@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRive, Layout, Fit, Alignment } from "@rive-app/react-canvas";
+import type RiveEvent from "@rive-app/react-canvas";
 
 type RiveCardProps = {
   // ——— NOVO: fontes Rive (se presentes, substituem a imagem ———
@@ -29,7 +30,6 @@ type RiveCardProps = {
   ctaTarget?: "_self" | "_blank";   // default: "_self"
   ctaStateName?: string;            // nome do estado que você entra ao clicar (default: "CTA_Click")
 
-
   // ——— Transform extras (escala/offset) ———
   // Valores gerais (aplicados a ambos quando específicos não são fornecidos)
   scale?: number;
@@ -55,6 +55,18 @@ function useIsMobile(query = "(max-width: 767px)") {
     return () => mql.removeEventListener?.("change", onChange);
   }, [query]);
   return isMobile;
+}
+
+// —— helper para extrair o nome do estado do evento do Rive sem usar `any`
+function getRiveStateName(evt: { data?: unknown }): string {
+  if (!evt) return "";
+  const data = (evt as unknown as { data?: unknown }).data;
+  if (typeof data === "object" && data !== null) {
+    const maybe = data as { stateName?: unknown; name?: unknown };
+    if (typeof maybe.stateName === "string") return maybe.stateName;
+    if (typeof maybe.name === "string") return maybe.name;
+  }
+  return "";
 }
 
 export default function RiveCard({
@@ -128,16 +140,14 @@ export default function RiveCard({
           stateMachines: config!.stateMachines,
           autoplay,
           layout: new Layout({ fit, alignment }),
-          onStateChange: (e) => 
-            {
-              const state = (e?.data && ((e.data as any). stateName || (e.data as any).name)) || "";
-              const expect = ctaStateName || "CTA_Click";
-              if (state === expect && ctaHref)
-              {
-                window.open(ctaHref, ctaTarget || "_self");
-              }
-            },
-        } 
+          onStateChange: (evt) => {
+            const state = getRiveStateName(evt);
+            const expect = ctaStateName || "CTA_Click";
+            if (state === expect && ctaHref) {
+              window.open(ctaHref, ctaTarget || "_self");
+            }
+          },
+        }
       : undefined
   );
 
@@ -151,7 +161,7 @@ export default function RiveCard({
   return (
     <div
       key={instanceKey}
-      className={(className ?? "relative w-[342px] h-[362px] rounded-3xl bg-[#0B1220] overflow-hidden")}
+      className={className ?? "relative w-[342px] h-[362px] rounded-3xl bg-[#0B1220] overflow-hidden"}
       style={{ position: "relative" }}
     >
       {willUseRive && RiveComponent ? (
