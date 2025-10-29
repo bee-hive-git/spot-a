@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 type CaseSingle = { img: string; caption: string };
@@ -262,6 +263,27 @@ export function CasosClientes() {
               </div>
             </div>
           </div>
+
+          {/* ===== Botão "Saiba mais" (ajustado) ===== */}
+          <div className="relative z-20 -mt-3 md:-mt-5 lg:-mt-7 flex w-full items-center justify-center">
+            <Link
+              href="https://wa.me/5511986542748?text=Olá! Gostaria de saber mais sobre os serviços de tráfego pago da Spot-A. Podem me ajudar a atrair leads qualificados e escalar minhas vendas?"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="
+                inline-flex items-center justify-center
+                rounded-[33.9px] border border-[#F3C53D]/60 bg-black/20 backdrop-blur-md
+                px-6 sm:px-7 md:px-8
+                h-[54px] sm:h-[56px] md:h-[60px] lg:h-[64px]
+                w-[66%] sm:w-[58%] md:w-[280px] lg:w-[320px]
+                text-sm sm:text-base md:text-lg
+                transition-colors hover:border-[#F3C53D]
+              "
+            >
+              Saiba mais
+            </Link>
+          </div>
+          {/* ===== /Botão ===== */}
         </div>
       </div>
     </section>

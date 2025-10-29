@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import ResponsiveRive from "@/components/nossos-servicos/NSRive";
 
 export default function HeroSection() {
@@ -28,15 +29,13 @@ export default function HeroSection() {
     mobileScale: 1,
     mobileOffsetX: 0,
     mobileOffsetY: 0,
-    // Navegação infinita + WhatsApp CTA
+    // Navegação infinita + WhatsApp CTA interno na Rive (mantido)
     enableWheelLoop: true,
     enableArrowKeys: true,
-    itemCount: 6, // ajuste conforme a quantidade real de serviços
+    itemCount: 6,
     initialIndex: 0,
-    riveIndexInputName: "index", // ajuste se seu State Machine usar outro nome
+    riveIndexInputName: "index",
     whatsappEnabled: true,
-    // Se não informarmos um número, o link abre o WhatsApp com a mensagem e você escolhe o contato
-    // Exemplo para ativar com número: whatsappNumber: "5581XXXXXXXXX",
     whatsappMessageByIndex: [
       "Olá! Tenho interesse em META ADS da Spot-A.",
       "Olá! Tenho interesse em YOUTUBE ADS da Spot-A.",
@@ -49,15 +48,13 @@ export default function HeroSection() {
 
   return (
     <section
-      className="relative w-full bg-[#010510] flex justify-center items-center"
+      className="relative w-full bg-[#010510] flex flex-col items-center"
       style={{
-        height: isMobile ? "140vh" : "auto", // altura geral menor só no mobile
-        overflow: "hidden", // corta o excesso do canvas
+        height: isMobile ? "140vh" : "auto", // mantém altura menor no mobile
+        overflow: "hidden",
       }}
     >
-      <div
-        className="w-full h-full flex justify-center items-center"
-      >
+      <div className="w-full h-full flex justify-center items-center">
         <div
           className="relative w-full"
           style={{
@@ -91,6 +88,27 @@ export default function HeroSection() {
           />
         </div>
       </div>
+
+      {/* ===== Botão "Saiba mais" (maior e mais próximo) ===== */}
+      <div className="relative z-20 -mt-3 md:-mt-5 lg:-mt-7 flex w-full items-center justify-center">
+        <Link
+          href="https://wa.me/5511986542748?text=Olá! Gostaria de saber mais sobre os serviços de tráfego pago da Spot-A. Podem me ajudar a atrair leads qualificados e escalar minhas vendas?"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="
+            inline-flex items-center justify-center
+            rounded-[33.9px] border border-[#F3C53D]/60 bg-black/20 backdrop-blur-md
+            px-6 sm:px-7 md:px-8
+            h-[54px] sm:h-[56px] md:h-[60px] lg:h-[64px]
+            w-[66%] sm:w-[58%] md:w-[280px] lg:w-[320px]
+            text-sm sm:text-base md:text-lg
+            transition-colors hover:border-[#F3C53D]
+          "
+        >
+          Saiba mais
+        </Link>
+      </div>
+      {/* ===== /Botão ===== */}
     </section>
   );
 }
