@@ -25,7 +25,7 @@ export default function HeroSection() {
           w-[min(100vw,430px)]
           aspect-[430/1300]          /* era 1640 → reduz altura */
           h-auto
-          md:w-[min(100vw,1920px)]
+          md:w-[min(100vw)]
           md:aspect-[1920/1350]      /* era 1800 → reduz altura e vazio superior */
           transition-all
           duration-300

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import ResponsiveRive from "@/components/nossos-servicos/NSRive";
+import { Fit } from "@rive-app/react-canvas";
 
 export default function HeroSection() {
   const [isMobile, setIsMobile] = useState(false);
@@ -22,9 +23,9 @@ export default function HeroSection() {
     mobileArtboard: "MOBILE_5",
     desktopStateMachines: ["State Machine 1"],
     mobileStateMachines: ["State Machine 1"],
-    desktopScale: 0.95,
+    desktopScale: 1.1,
     desktopOffsetX: 0,
-    desktopOffsetY: -40,
+    desktopOffsetY: 0,
     mobileScale: 1,
     mobileOffsetX: 0,
     mobileOffsetY: 0,
@@ -49,9 +50,9 @@ export default function HeroSection() {
 
   return (
     <section
-      className="relative w-full bg-[#010510] flex justify-center items-center"
+      className="relative w-full bg-[#010510] flex justify-center"
       style={{
-        height: isMobile ? "140vh" : "auto", // altura geral menor só no mobile
+        height: isMobile ? "140vh" : "100dvh", // altura geral menor só no mobile
         overflow: "hidden", // corta o excesso do canvas
       }}
     >
@@ -59,7 +60,7 @@ export default function HeroSection() {
         className="w-full h-full flex justify-center items-center"
       >
         <div
-          className="relative w-full"
+          className="absolute w-full"
           style={{
             aspectRatio: isMobile ? 430 / 1454 : 1920 / 1181,
             maxWidth: isMobile ? "100vw" : "1920px",
@@ -88,7 +89,7 @@ export default function HeroSection() {
             // whatsappNumber={"5581XXXXXXXXX"} // opcional: ative com seu número real
             whatsappMessageByIndex={riveProps.whatsappMessageByIndex}
             className="w-full h-full"
-          />
+            />
         </div>
       </div>
     </section>

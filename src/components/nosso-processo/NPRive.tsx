@@ -24,6 +24,12 @@ type RiveCardProps = {
   // ——— Layout ———
   className?: string;                // para dimensionar via Tailwind/CSS
 
+  // ——— Link acionado pelo .riv ———
+  ctaHref?: string;                 // ex: "#diagnostico" ou "https://..."
+  ctaTarget?: "_self" | "_blank";   // default: "_self"
+  ctaStateName?: string;            // nome do estado que você entra ao clicar (default: "CTA_Click")
+
+
   // ——— Transform extras (escala/offset) ———
   // Valores gerais (aplicados a ambos quando específicos não são fornecidos)
   scale?: number;
@@ -76,6 +82,9 @@ export default function RiveCard({
   desktopOffsetY,
   mobileOffsetX,
   mobileOffsetY,
+  ctaHref,
+  ctaTarget,
+  ctaStateName,
 }: RiveCardProps) {
   const isMobile = useIsMobile();
 
@@ -119,7 +128,16 @@ export default function RiveCard({
           stateMachines: config!.stateMachines,
           autoplay,
           layout: new Layout({ fit, alignment }),
-        }
+          onStateChange: (e) => 
+            {
+              const state = (e?.data && ((e.data as any). stateName || (e.data as any).name)) || "";
+              const expect = ctaStateName || "CTA_Click";
+              if (state === expect && ctaHref)
+              {
+                window.open(ctaHref, ctaTarget || "_self");
+              }
+            },
+        } 
       : undefined
   );
 
@@ -133,7 +151,7 @@ export default function RiveCard({
   return (
     <div
       key={instanceKey}
-      className={className ?? "relative w-[342px] h-[362px] rounded-3xl bg-[#0B1220] overflow-hidden"}
+      className={(className ?? "relative w-[342px] h-[362px] rounded-3xl bg-[#0B1220] overflow-hidden")}
       style={{ position: "relative" }}
     >
       {willUseRive && RiveComponent ? (
