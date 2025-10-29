@@ -7,20 +7,12 @@ import { ArrowRight } from "lucide-react";
 import HeroScrollComposite from "./components/HeroScrollComposite";
 import HeroStats from "./components/HeroStats";
 
-// ===== Config da sequência =====
-const seqProps = {
-  orient: "flipY" as const,
-  fit: "cover" as const,
-  yPct: 20, // Aumentado para mobile - mais espaçamento no topo
-  zoom: 1.1,
-};
-
-// ===== Config específica para mobile (cubo centralizado) =====
+// ===== Config específica para scroll =====
 const seqPropsScroll = {
   orient: "flipY" as const,
-  fit: "cover" as const, // Voltando para cover para manter a esteira visível
-  yPct: 15, // Ajustado para manter visibilidade
-  zoom: 1.1, // Mesmo zoom para consistência
+  fit: "cover" as const,
+  yPct: 15,
+  zoom: 1.1,
 };
 
 export default function Hero() {
@@ -29,10 +21,14 @@ export default function Hero() {
 
   // Estado para controlar quando mostrar as estatísticas (último frame)
   const [showStats, setShowStats] = useState(false);
+  const showStatsRef = useRef(showStats);
+  useEffect(() => {
+    showStatsRef.current = showStats;
+  }, [showStats]);
 
   // ==== CONTROLES (pode mexer ao vivo) ====
   const [rangePct, setRangePct] = useState(200);   // RANGE em %
-  const [fadeEndPct, setFadeEndPct] = useState(35); // FADE_END em %
+  const [fadeEndPct, setFadeEndPct] = useState(35); // mantido no painel (não usado no cálculo abaixo)
   const [scrubSmooth, setScrubSmooth] = useState(0); // 0 = scrub 1:1; >0 = suavização (segundos)
   const [showMarkers, setShowMarkers] = useState(false);
   const [hideGrid, setHideGrid] = useState(true);
@@ -48,93 +44,96 @@ export default function Hero() {
   }, []);
 
   useLayoutEffect(() => {
-    let ctx: gsap.Context | null = null;
+    let ctx: { revert: () => void } | null = null;
+
     (async () => {
       const { gsap } = await import("gsap");
       const { ScrollTrigger } = await import("gsap/ScrollTrigger");
       gsap.registerPlugin(ScrollTrigger);
-  
+
       const el = pinRef.current;
       if (!el) return;
-  
-      // ===== CONTROLES =====
-      const RANGE = "+=200%";     // tempo total do pin
-      const FADE_START_P = 0.005; // ponto exato em que o fade começa (0.002 ~ quando a seq ativa)
-      const FADE_SPAN_P  = 0.10;  // duração do fade em fração do progresso (10% do pin)
-                                  // ↓ quer mais rápido? tente 0.05; mais lento? 0.20
-  
+
+      // ===== CONTROLES dinâmicos =====
+      const RANGE = `+=${rangePct}%`;                  // tempo total do pin
+      const SCRUB: true | number = scrubSmooth === 0 ? true : scrubSmooth;
+      const FADE_START_P = 0.005;                      // ponto em que o fade começa
+      const FADE_SPAN_P  = 0.10;                       // duração do fade no progresso
+
       ctx = gsap.context(() => {
         // 1) PIN do Hero (dirige Canvas + fade por progress)
         ScrollTrigger.create({
           trigger: el,
           start: "top top",
           end: RANGE,
-          scrub: true,
+          scrub: SCRUB,
           pin: true,
           pinSpacing: true,
           anticipatePin: 1,
           invalidateOnRefresh: true,
+          markers: showMarkers,
           onUpdate: (s) => {
             // mantém sua seq-scroll
             setScrollP(s.progress);
 
             // Detecta quando chegou próximo ao último frame (95% do progresso)
             if (s.progress >= 0.95) {
-              // Força reset e depois ativa para garantir nova animação
-              if (showStats) {
+              if (showStatsRef.current) {
                 setShowStats(false);
                 setTimeout(() => setShowStats(true), 50);
               } else {
                 setShowStats(true);
               }
-            } else if (s.progress < 0.95 && showStats) {
+            } else if (s.progress < 0.95 && showStatsRef.current) {
               setShowStats(false);
             }
-  
+
             // === Fade sincronizado ao progress ===
             const p = s.progress; // 0 → 1
             // normaliza para [0..1] a partir do FADE_START_P
             let t = (p - FADE_START_P) / FADE_SPAN_P;
             if (t < 0) t = 0;
             if (t > 1) t = 1;
-  
+
             // 1 → 0: opacidade; e leve subida (conteúdo principal)
             const alpha = 1 - t;
             gsap.set("#hero-content", { autoAlpha: alpha, yPercent: -6 * t });
-            gsap.set(".bg-grid",      { autoAlpha: alpha }); // remova esta linha se quiser manter a grid
-  
+
+            // grid pode ser ocultada pelo controle
+            const gridAlpha = hideGrid ? 0 : alpha;
+            gsap.set(".bg-grid", { autoAlpha: gridAlpha });
+
             // desabilita clique enquanto está desvanecendo
             const hc = document.getElementById("hero-content");
             if (hc) hc.style.pointerEvents = alpha < 0.95 ? "none" : "auto";
 
             // === Fade das estatísticas (lógica inversa) ===
-            // Começa a aparecer quando o conteúdo principal está quase sumindo
             const STATS_START_P = 0.85; // começa a aparecer em 85%
             const STATS_SPAN_P = 0.15;  // duração do fade (15% do progresso)
-            
+
             let statsT = (p - STATS_START_P) / STATS_SPAN_P;
             if (statsT < 0) statsT = 0;
             if (statsT > 1) statsT = 1;
-            
+
             // 0 → 1: opacidade das estatísticas
             const statsAlpha = statsT;
             gsap.set("#hero-stats", { autoAlpha: statsAlpha, yPercent: 6 * (1 - statsT) });
           },
-          // markers: true,
         });
-  
-        // 2) Paralaxe do Canvas (mantém)
+
+        // 2) Paralaxe do Canvas
         gsap.to("#hero-canvas-wrap", {
           yPercent: 8,
           ease: "none",
-          scrollTrigger: { trigger: el, start: "top top", end: RANGE, scrub: true },
+          scrollTrigger: { trigger: el, start: "top top", end: RANGE, scrub: SCRUB, markers: showMarkers },
         });
       }, el);
-    })();  
-    return () => ctx?.revert();
-  }, [rangePct, fadeEndPct, scrubSmooth, showMarkers, hideGrid]);
+    })();
 
-  // Exibimos apenas a sequência de scroll (com looping integrado). Sem animação de loop separada.
+    return () => ctx?.revert();
+  }, [rangePct, scrubSmooth, showMarkers, hideGrid]); // <- sem 'showStats' aqui (usamos ref)
+
+  // Exibimos apenas a sequência de scroll
   const showScroll = true;
 
   return (
@@ -149,7 +148,8 @@ export default function Hero() {
         className="absolute inset-0 -z-10"
         style={{
           backgroundColor: "#010510",
-          backgroundImage: 'image-set(url("/AnimationHero/HERO_SPOT.webp") type("image/webp"), url("/AnimationHero/HERO_SPOT.png") type("image/png"))',
+          backgroundImage:
+            'image-set(url("/AnimationHero/HERO_SPOT.webp") type("image/webp"), url("/AnimationHero/HERO_SPOT.png") type("image/png"))',
           backgroundRepeat: "no-repeat",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -157,23 +157,23 @@ export default function Hero() {
       />
 
       {/* Canvas - Animação sempre abaixo dos botões e ocupando toda a largura */}
-      <div 
-        id="hero-canvas-wrap" 
-        style={{ 
+      <div
+        id="hero-canvas-wrap"
+        style={{
           position: "absolute",
-          top: 0, 
-          left: 0, 
-          width: "100%", 
+          top: 0,
+          left: 0,
+          width: "100%",
           height: "100%",
           margin: 0,
           padding: 0,
           overflow: "hidden",
-          zIndex: -1, // Ajustado para ficar visível mas atrás do conteúdo
-          pointerEvents: "none"
+          zIndex: -1, // visível mas atrás do conteúdo
+          pointerEvents: "none",
         }}
       >
         <Canvas
-          style={{ 
+          style={{
             background: "transparent",
             width: "100%",
             height: "100%",
@@ -182,11 +182,18 @@ export default function Hero() {
             padding: 0,
             position: "absolute",
             top: 0,
-            left: 0
+            left: 0,
           }}
           dpr={[1, 1.2]}
-          frameloop={"demand"}
-          gl={{ alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: "low-power" }}
+          frameloop="demand"
+          gl={{
+            alpha: true,
+            premultipliedAlpha: true,
+            antialias: false,
+            depth: false,
+            stencil: false,
+            powerPreference: "low-power",
+          }}
           camera={{ position: [0, 0, 9.5], fov: 50 }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.NoToneMapping;
@@ -196,11 +203,11 @@ export default function Hero() {
         </Canvas>
       </div>
 
-      {/* Overlays - Ajustados para não interferir na animação */}
+      {/* Overlays */}
       <div className="pointer-events-none absolute inset-0 z-[5] bg-grid opacity-[0.90]" />
       <div className="pointer-events-none absolute inset-0 z-[6] bg-gradient-to-b from-transparent via-transparent to-transparent" />
 
-      {/* Conteúdo do Hero (texto/CTAs) - Sempre acima da animação */}
+      {/* Conteúdo do Hero (texto/CTAs) */}
       <div id="hero-content" className="relative z-[2000] mx-auto w-full px-4 sm:px-6 md:px-8 lg:px-14">
         {/* topbar */}
         <div className="flex items-center justify-between pt-6 sm:pt-8 md:pt-9 lg:pt-11">
@@ -235,13 +242,11 @@ export default function Hero() {
               color: "transparent",
             }}
           >
-            {/* Mobile: cortes pontuais em 3 linhas para melhor proporção */}
             <span className="sm:hidden">
               <span className="block">Tráfego Pago para Atrair</span>
               <span className="block">Leads Qualificados</span>
               <span className="block">e Escalar Vendas</span>
             </span>
-            {/* Desktop/Tablet: mantém 2 linhas */}
             <span className="hidden sm:block">
               <span className="block">Tráfego Pago para Atrair Leads</span>
               <span className="block">Qualificados e Escalar Vendas</span>
@@ -252,13 +257,11 @@ export default function Hero() {
             className="mt-4 sm:mt-5 md:mt-6 text-white/90 px-3 sm:px-4 max-w-[92%] sm:max-w-[80%] md:max-w-full"
             style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "clamp(14px, 3.4vw, 19px)", lineHeight: "138%" }}
           >
-            {/* Mobile: quebras mais naturais em 3 linhas curtas */}
             <span className="sm:hidden">
               <span className="block">Transformamos marcas em potências digitais</span>
               <span className="block">com estratégias de tráfego pago personalizadas,</span>
               <span className="block">foco em leads qualificados e alta performance.</span>
             </span>
-            {/* Desktop/Tablet: mantém 2 linhas */}
             <span className="hidden sm:block">
               <span className="block">Transformamos marcas em potências digitais com estratégias de tráfego pago</span>
               <span className="block">personalizadas, foco em leads qualificados e execução de alta performance.</span>
@@ -372,8 +375,8 @@ export default function Hero() {
       )}
 
       {/* ===== Estatísticas do Hero (aparecem no último frame) ===== */}
-      <HeroStats 
-        isVisible={showStats} 
+      <HeroStats
+        isVisible={showStats}
         className="absolute inset-0 z-20 flex flex-col items-center justify-center px-6 sm:px-8 md:px-14"
         id="hero-stats"
       />

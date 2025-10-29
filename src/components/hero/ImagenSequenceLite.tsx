@@ -1,7 +1,7 @@
 "use client";
 import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 type Orient = "none" | "flipY" | "flipX" | "rotate180";
 type Fit = "cover" | "contain";
@@ -14,21 +14,20 @@ type Props = {
   dir: string;
   base: string;
   pad?: number;
-  ext?: "webp" | "png" | "jpg"; // primary extension (default)
-  extCandidates?: ("webp" | "png" | "jpg")[]; // optional fallback chain
+  ext?: "webp" | "png" | "jpg";
+  extCandidates?: ("webp" | "png" | "jpg")[];
   start?: number;
-  progress?: number;      // 0..1 (scrub)
-  // Quando presente, multiplica o range de scroll por "loops" e faz wrap (p*loops % 1)
-  loops?: number;         // default 1 = sem repetição; 2+ = repete durante o scroll
+  progress?: number; // 0..1
+  loops?: number;
   visible?: boolean;
-  active?: boolean;       // loop
+  active?: boolean;
   renderOrder?: number;
-  size?: [number, number]; // base do plano (ex.: [16,9])
-  maxCache?: number;      // LRU
-  orient?: Orient;        // orientação do frame
-  fit?: Fit;              // cover = preenche, contain = mostra tudo
-  yPct?: number;      // ← NOVO (default 0). + sobe, – desce. Em % da altura da viewport do Canvas
-  zoom?: number;      // ← NOVO (default 1). 1.06 = 6% maior
+  size?: [number, number];
+  maxCache?: number;
+  orient?: Orient;
+  fit?: Fit;
+  yPct?: number;
+  zoom?: number;
 };
 
 export default function ImagenSequenceLite({
@@ -60,7 +59,7 @@ export default function ImagenSequenceLite({
   const aliveRef = useRef(true);
   const inflightRef = useRef<Map<number, AbortController>>(new Map());
 
-  // URLs dos frames
+  // URLs
   const urls = useMemo(
     () =>
       Array.from({ length: count }, (_, i) =>
@@ -69,206 +68,217 @@ export default function ImagenSequenceLite({
     [count, dir, base, pad, start]
   );
 
+  // cleanup seguro (captura refs)
   useEffect(() => {
+    const cache = cacheRef.current;
+    const inflight = inflightRef.current;
+
     return () => {
       aliveRef.current = false;
-      cacheRef.current.forEach((e) => {
+      cache.forEach((e) => {
         e.tex.dispose();
-        try { 
-          if (e.bmp && 'close' in e.bmp && typeof e.bmp.close === 'function') {
-            e.bmp.close();
+        try {
+          if (e.bmp && "close" in e.bmp && typeof (e.bmp as ImageBitmap).close === "function") {
+            (e.bmp as ImageBitmap).close();
           }
-        } catch {}
+        } catch {
+          /* noop */
+        }
       });
-      cacheRef.current.clear();
-      inflightRef.current.forEach((c) => { try { c.abort(); } catch {} });
-      inflightRef.current.clear();
+      cache.clear();
+      inflight.forEach((c) => {
+        try {
+          c.abort();
+        } catch {
+          /* noop */
+        }
+      });
+      inflight.clear();
     };
   }, []);
 
-  // ====== Auto-resize: escala o plano conforme a viewport do Canvas ======
+  // resize
+  const planeW = planeSize[0];
+  const planeH = planeSize[1];
+
   useEffect(() => {
     if (!meshRef.current) return;
     const cam = camera as THREE.PerspectiveCamera;
 
-    // altura/largura visíveis na cena (em unidades 3D)
-    const dist = Math.abs(cam.position.z - 0);            // plano em z=0
+    const dist = Math.abs(cam.position.z - 0);
     const vFov = THREE.MathUtils.degToRad(cam.fov);
     const viewH = 2 * Math.tan(vFov / 2) * dist;
     const viewW = viewH * cam.aspect;
 
-    const [baseW, baseH] = planeSize;                     // ex.: 16x9
-    const sCover   = Math.max(viewW / baseW, viewH / baseH);
-    const sContain = Math.min(viewW / baseW, viewH / baseH);
+    const sCover = Math.max(viewW / planeW, viewH / planeH);
+    const sContain = Math.min(viewW / planeW, viewH / planeH);
     const s = (fit === "cover" ? sCover : sContain) * zoom;
 
-    // aplica escala
     meshRef.current.scale.set(s, s, 1);
 
-    // dimensões do plano já escalado
-    const planeH = baseH * s;
-
-    // margem vertical máxima sem “vazar”; se o plano for maior que a viewport, zera
-    const maxYOffset = Math.max(0, (viewH - planeH) / 2);
-
-    // deslocamento solicitado (yPct é % da meia-altura visível)
+    const scaledPlaneH = planeH * s;
+    const maxYOffset = Math.max(0, (viewH - scaledPlaneH) / 2);
     const desiredY = (yPct / 100) * (viewH / 2);
-
-    // clamp para não cortar no topo/fundo
     const y = THREE.MathUtils.clamp(desiredY, -maxYOffset, maxYOffset);
+
     meshRef.current.position.set(0, y, 0);
+    invalidate();
+  }, [camera, viewport.width, viewport.height, fit, planeW, planeH, yPct, zoom, invalidate]);
 
-    invalidate(); // útil caso esteja com frameloop="demand"
-  }, [
-    camera,
-    viewport.width,
-    viewport.height,
-    fit,
-    planeSize[0],
-    planeSize[1],
-    yPct,
-    zoom,
-    invalidate,
-  ]);
-
-
-  // ====== Loader LRU ======
-  // detecta qualidade da conexão para ajustar janela de prefetch
-  function getPrefetchWindow(): number {
-    const conn = (navigator as any).connection?.effectiveType as string | undefined;
-    if (!conn) return 1; // default conservador
+  // prefetch window
+  const getPrefetchWindow = useCallback((): number => {
+    type NavigatorWithConn = Navigator & { connection?: { effectiveType?: string } };
+    const conn = (navigator as NavigatorWithConn).connection?.effectiveType;
+    if (!conn) return 1;
     if (conn.includes("2g")) return 1;
     if (conn.includes("3g")) return 1;
-    return 2; // 4g ou melhor
-  }
+    return 2;
+  }, []);
 
-  async function loadTexture(idx: number, isPrefetch: boolean = false): Promise<THREE.Texture | null> {
-    if (!aliveRef.current) return null;
-    const c = cacheRef.current;
-    const hit = c.get(idx);
-    if (hit) { c.delete(idx); c.set(idx, hit); return hit.tex; }
-    const name = urls[idx];
-    const candidates = (extCandidates && extCandidates.length > 0) ? extCandidates : [ext];
-    let tex: THREE.Texture | null = null;
-    // limita concorrência durante prefetch para evitar excesso de requisições
-    const PREFETCH_CONCURRENCY_LIMIT = 1;
-    if (isPrefetch && inflightRef.current.size >= PREFETCH_CONCURRENCY_LIMIT) {
-      return null;
-    }
-    const ac = new AbortController();
-    inflightRef.current.set(idx, ac);
-    try {
-      // tenta nas extensões em ordem
-      for (const ex of candidates) {
-        const url = `${name}.${ex}`;
-        try {
-          if ("createImageBitmap" in window) {
-            const res = await fetch(url, { cache: "force-cache", signal: ac.signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const blob = await res.blob();
-            const bmp = await createImageBitmap(blob);
-            tex = new THREE.Texture(bmp);
-            (tex as THREE.Texture & { __bmp?: ImageBitmap }).__bmp = bmp;
-          } else {
-            const img = await new Promise<HTMLImageElement>((ok, err) => {
-              const im = new Image(); im.onload = () => ok(im); im.onerror = err; im.src = url;
-            });
-            tex = new THREE.Texture(img);
-            (tex as THREE.Texture & { __img?: HTMLImageElement }).__img = img;
+  // loadTexture
+  const loadTexture = useCallback(
+    async (idx: number, isPrefetch = false): Promise<THREE.Texture | null> => {
+      if (!aliveRef.current) return null;
+
+      const c = cacheRef.current;
+      const hit = c.get(idx);
+      if (hit) {
+        c.delete(idx);
+        c.set(idx, hit);
+        return hit.tex;
+      }
+
+      const name = urls[idx];
+      const candidates = extCandidates && extCandidates.length > 0 ? extCandidates : [ext];
+      let tex: THREE.Texture | null = null;
+
+      const PREFETCH_CONCURRENCY_LIMIT = 1;
+      if (isPrefetch && inflightRef.current.size >= PREFETCH_CONCURRENCY_LIMIT) {
+        return null;
+      }
+
+      const ac = new AbortController();
+      inflightRef.current.set(idx, ac);
+
+      try {
+        for (const ex of candidates) {
+          const url = `${name}.${ex}`;
+          try {
+            if ("createImageBitmap" in window) {
+              const res = await fetch(url, { cache: "force-cache", signal: ac.signal });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const blob = await res.blob();
+              const bmp = await createImageBitmap(blob);
+              tex = new THREE.Texture(bmp);
+              (tex as THREE.Texture & { __bmp?: ImageBitmap }).__bmp = bmp;
+            } else {
+              const img = await new Promise<HTMLImageElement>((ok, err) => {
+                const im = new Image();
+                im.onload = () => ok(im);
+                im.onerror = err as (ev: string | Event) => void;
+                im.src = url;
+              });
+              tex = new THREE.Texture(img);
+              (tex as THREE.Texture & { __img?: HTMLImageElement }).__img = img;
+            }
+            break;
+          } catch {
+            tex = null;
+            continue;
           }
-          // sucesso nesta extensão
-          break;
-        } catch (e) {
-          tex = null; // tenta próxima extensão
-          continue;
+        }
+
+        if (!tex) return null;
+
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.flipY = false;
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+
+        c.set(idx, { tex });
+        if (c.size > maxCache) {
+          const oldest = c.keys().next().value as number | undefined;
+          if (oldest !== undefined) {
+            c.get(oldest)?.tex.dispose();
+            c.delete(oldest);
+          }
+        }
+        return tex;
+      } catch {
+        return null;
+      } finally {
+        inflightRef.current.delete(idx);
+      }
+    },
+    [urls, extCandidates, ext, maxCache]
+  );
+
+  // showFrame
+  const showFrame = useCallback(
+    async (idx: number) => {
+      const tex = await loadTexture(idx);
+      if (!tex || !matRef.current) return;
+
+      if (matRef.current.map !== tex) {
+        matRef.current.map = tex;
+
+        const map = matRef.current.map!;
+        map.wrapS = THREE.RepeatWrapping;
+        map.wrapT = THREE.RepeatWrapping;
+
+        map.center.set(0.5, 0.5);
+        map.rotation = 0;
+        map.repeat.set(1, 1);
+        map.offset.set(0, 0);
+
+        if (orient === "flipY") {
+          map.repeat.y = -1;
+          map.offset.y = 1;
+        } else if (orient === "flipX") {
+          map.repeat.x = -1;
+          map.offset.x = 1;
+        } else if (orient === "rotate180") {
+          map.rotation = Math.PI;
+        }
+        map.needsUpdate = true;
+
+        matRef.current.needsUpdate = true;
+        invalidate();
+      }
+    },
+    [invalidate, loadTexture, orient]
+  );
+
+  // prefetch
+  const prefetchWindowFrom = useCallback(
+    (idx: number) => {
+      const win = getPrefetchWindow();
+      for (let k = 1; k <= win; k++) {
+        const n = Math.min(count - 1, idx + k);
+        if (!cacheRef.current.has(n) && !inflightRef.current.has(n)) {
+          void loadTexture(n, true);
         }
       }
+    },
+    [count, getPrefetchWindow, loadTexture]
+  );
 
-      if (!tex) return null;
-
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.flipY = false; // controlamos flip via orient
-      tex.magFilter = THREE.LinearFilter;
-      tex.minFilter = THREE.LinearFilter;
-      tex.generateMipmaps = false;
-      tex.needsUpdate = true;
-
-      c.set(idx, { tex });
-      if (c.size > maxCache) {
-        const oldest = c.keys().next().value;
-        if (oldest !== undefined) {
-          c.get(oldest)?.tex.dispose();
-          c.delete(oldest);
-        }
-      }
-      return tex;
-    } catch {
-      return null;
-    }
-    }
-
-  // ====== Aplica frame + orientação ======
-  async function showFrame(idx: number) {
-    const tex = await loadTexture(idx);
-    if (!tex || !matRef.current) return;
-
-    if (matRef.current.map !== tex) {
-      matRef.current.map = tex;
-
-      const map = matRef.current.map!;
-      map.wrapS = THREE.RepeatWrapping;
-      map.wrapT = THREE.RepeatWrapping;
-
-      // zera transformações anteriores
-      map.center.set(0.5, 0.5);
-      map.rotation = 0;
-      map.repeat.set(1, 1);
-      map.offset.set(0, 0);
-
-      // orientação solicitada
-      if (orient === "flipY") {
-        map.repeat.y = -1;
-        map.offset.y = 1;
-      } else if (orient === "flipX") {
-        map.repeat.x = -1;
-        map.offset.x = 1;
-      } else if (orient === "rotate180") {
-        map.rotation = Math.PI;
-      }
-      map.needsUpdate = true;
-
-      matRef.current.needsUpdate = true;
-      invalidate();
-    }
-  }
-
-  // prefetch inteligente com janela adaptativa
-  function prefetchWindowFrom(idx: number) {
-    const win = getPrefetchWindow();
-    for (let k = 1; k <= win; k++) {
-      const n = Math.min(count - 1, idx + k);
-      if (!cacheRef.current.has(n) && !inflightRef.current.has(n)) void loadTexture(n, true);
-    }
-  }
-
-  // ====== Scrub (scroll) ======
+  // scrub
   useEffect(() => {
     if (typeof progress !== "number") return;
-    // Quando loops == 1, NÃO faz wrap — usa o último frame no final do scroll.
     const totalLoops = Math.max(1, Math.floor(loops));
     const pClamped = Math.min(1, Math.max(0, progress));
-    const pEff = totalLoops > 1
-      ? ((pClamped * totalLoops) % 1) // wrap apenas se loops>1
-      : pClamped;                      // sem wrap: 0..1 inteiro
+    const pEff = totalLoops > 1 ? (pClamped * totalLoops) % 1 : pClamped;
     const idx = Math.min(count - 1, Math.max(0, Math.floor(pEff * (count - 1) + 0.00001)));
-    showFrame(idx);
+    void showFrame(idx);
     prefetchWindowFrom(idx);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progress, loops, count]);
+  }, [progress, loops, count, showFrame, prefetchWindowFrom]);
 
-  // ====== Loop com timer (frameloop="demand") ======
+  // loop
   useEffect(() => {
-    if (typeof progress === "number") return; // se tem scrub, não loopeia
+    if (typeof progress === "number") return;
     if (!active) return;
 
     const intervalMs = Math.max(1000 / fps, 16);
@@ -277,18 +287,18 @@ export default function ImagenSequenceLite({
     const tick = () => {
       if (!aliveRef.current) return;
       if (document.hidden) return;
-      // avança 1 frame por tick
       const next = (Math.floor(timeRef.current) + 1) % count;
       timeRef.current = next;
-      showFrame(next);
+      void showFrame(next);
       prefetchWindowFrom(next);
     };
 
     id = setInterval(tick, intervalMs);
-    return () => { if (id) clearInterval(id); };
-  }, [progress, active, fps, count]);
+    return () => {
+      if (id) clearInterval(id);
+    };
+  }, [progress, active, fps, count, showFrame, prefetchWindowFrom]);
 
-  // mantém montado (evita flicker); controla só visibility
   return (
     <mesh ref={meshRef} visible={visible} renderOrder={renderOrder}>
       <planeGeometry args={planeSize} />

@@ -38,18 +38,16 @@ type RiveCardProps = {
   mobileOffsetY?: number; // px
 
   // ——— Controle de navegação/loop ———
-  // Permite rolagem/teclas infinitas: ao chegar no último, volta ao primeiro
-  enableWheelLoop?: boolean; // ativa navegação por scroll do mouse
-  enableArrowKeys?: boolean; // ativa navegação por setas do teclado (↑ ↓)
-  itemCount?: number;        // quantidade de itens (para fazer o wrap)
-  initialIndex?: number;     // índice inicial
-  riveIndexInputName?: string; // nome do input numérico no State Machine (ex: "index")
+  enableWheelLoop?: boolean;
+  enableArrowKeys?: boolean;
+  itemCount?: number;
+  initialIndex?: number;
+  riveIndexInputName?: string;
 
   // ——— WhatsApp CTA ———
-  whatsappEnabled?: boolean;           // ativa o botão
-  whatsappNumber?: string;             // número com DDI/DDD (ex: "5581999999999"); se vazio, abre seleção de contato
-  whatsappMessageByIndex?: string[];   // mensagens por índice
-  // Área clicável (overlay) para alinhar ao botão do banner
+  whatsappEnabled?: boolean;
+  whatsappNumber?: string;
+  whatsappMessageByIndex?: string[];
   whatsappOverlayDesktop?: { topPct?: number; leftPct?: number; widthPx?: number; heightPx?: number };
   whatsappOverlayMobile?: { topPct?: number; leftPct?: number; widthPx?: number; heightPx?: number };
 };
@@ -67,6 +65,12 @@ function useIsMobile(query = "(max-width: 767px)") {
   return isMobile;
 }
 
+// Tipagens auxiliares para evitar `any` ao acessar inputs do SM
+type RiveInput = { name: string; value: unknown };
+type RiveWithInputs = {
+  stateMachineInputs?: (smName: string) => RiveInput[] | undefined;
+};
+
 export default function RiveCard({
   desktopSrc,
   mobileSrc,
@@ -75,7 +79,6 @@ export default function RiveCard({
   desktopStateMachines,
   mobileStateMachines,
   autoplay = true,
-  // Ajuste: usar Fit.Contain como padrão para evitar "zoom" exagerado
   fit = Fit.Contain,
   alignment = Alignment.Center,
   imgSrc,
@@ -147,9 +150,10 @@ export default function RiveCard({
         stateMachines: config.stateMachines,
       });
       console.groupEnd();
-    } catch {}
+    } catch {
+      /* noop */
+    }
     let cancelled = false;
-    // Importante: usar GET com cache: "no-store" em dev evita net::ERR_ABORTED do Next.js
     fetch(src, { method: "GET", cache: "no-store" })
       .then((res) => {
         if (cancelled) return;
@@ -163,7 +167,9 @@ export default function RiveCard({
         if (cancelled) return;
         console.error(`[NSRive] Erro ao requisitar ${src}`, err);
       });
-    return () => { cancelled = true; };
+    return () => {
+        cancelled = true;
+    };
   }, [willUseRive, config, isMobile]);
 
   const instanceKey = config
@@ -193,19 +199,31 @@ export default function RiveCard({
   // ——— Índice controlado para loop infinito ———
   const [index, setIndex] = useState<number>(Math.max(0, Math.min(initialIndex, Math.max(0, itemCount - 1))));
 
-  // Atualiza o input do Rive, se existir
+  // Atualiza o input do Rive, se existir (sem `any`)
   useEffect(() => {
     if (!rive || !config?.stateMachines || !config.stateMachines.length) return;
     const sm = config.stateMachines[0];
+
     try {
-      const inputs = (rive as any)?.stateMachineInputs?.(sm) ?? [];
-      const idxInput = inputs?.find?.((i: any) =>
-        String(i?.name ?? "").toLowerCase() === String(riveIndexInputName).toLowerCase()
-      );
+      const inputs =
+        (rive as unknown as RiveWithInputs).stateMachineInputs?.(sm) ?? [];
+
+      // procura pelo input que bate com o nome configurado
+      const idxInput = inputs.find((i) => {
+        const name = typeof i?.name === "string" ? i.name : "";
+        return name.toLowerCase() === String(riveIndexInputName).toLowerCase();
+      });
+
       if (idxInput && typeof idxInput.value === "number") {
-        if (idxInput.value !== index) idxInput.value = index; // evita setar o mesmo valor repetidamente
+        if (idxInput.value !== index) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (idxInput as any).value = index;
+          idxInput.value = index;
+        }
       }
-    } catch {}
+    } catch {
+      /* noop */
+    }
   }, [rive, config, index, riveIndexInputName]);
 
   // Handlers de navegação (scroll e teclado) com wrap
@@ -219,26 +237,31 @@ export default function RiveCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [enableArrowKeys, itemCount]);
 
-  // Mensagens padrão (ajuste conforme sua ordem real de serviços)
+  // Mensagens padrão
   const defaultMsgs = Array.from({ length: itemCount }, (_, i) => {
     if (i === 0) return "Olá! Tenho interesse em META ADS da Spot-A.";
     if (i === 1) return "Olá! Tenho interesse em YOUTUBE ADS da Spot-A.";
     return "Olá! Tenho interesse nesse serviço da Spot-A.";
   });
   const currentMsg = (whatsappMessageByIndex ?? defaultMsgs)[index % itemCount];
-  const waHref = (whatsappNumber && whatsappNumber.trim().length > 0)
-    ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(currentMsg)}`
-    : `https://wa.me/?text=${encodeURIComponent(currentMsg)}`;
+  const waHref =
+    whatsappNumber && whatsappNumber.trim().length > 0
+      ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(currentMsg)}`
+      : `https://wa.me/?text=${encodeURIComponent(currentMsg)}`;
 
   return (
     <div
       key={instanceKey}
       className={className ?? "relative w-[342px] h-[362px] rounded-3xl bg-[#0B1220] overflow-hidden"}
       style={{ position: "relative" }}
-      onWheel={enableWheelLoop ? (e) => {
-        const dir = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0;
-        if (dir !== 0) setIndex((i) => (i + dir + itemCount) % itemCount);
-      } : undefined}
+      onWheel={
+        enableWheelLoop
+          ? (e: React.WheelEvent<HTMLDivElement>) => {
+              const dir = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0;
+              if (dir !== 0) setIndex((i) => (i + dir + itemCount) % itemCount);
+            }
+          : undefined
+      }
     >
       {willUseRive && RiveComponent ? (
         <RiveComponent
@@ -275,7 +298,6 @@ export default function RiveCard({
             width: `${cfg.widthPx}px`,
             height: `${cfg.heightPx}px`,
             zIndex: 100,
-            // invisível para não duplicar o botão visual; apenas captura o clique
             background: "transparent",
             pointerEvents: "auto",
             cursor: "pointer",
