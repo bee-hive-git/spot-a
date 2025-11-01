@@ -1,6 +1,7 @@
 "use client"
 
 import ImageSequenceLite from "../ImagenSequenceLite";
+import { useEffect, useState } from "react";
 
 type Props = {
   progress?: number; // 0..1 do ScrollTrigger
@@ -25,53 +26,44 @@ export default function HeroScrollComposite({
   zoom = 1,
   ratio = 0.35,
 }: Props) {
+  const [sourcesScroll, setSourcesScroll] = useState<string[] | undefined>(undefined);
+
+  // Gera fontes locais imediatamente (sem depender de manifest) para evitar requisições .avif inexistentes
+  useEffect(() => {
+    const total = 214; // temos 214 frames locais em /public/AnimationHero/seq-scroll
+    const localWebp = Array.from({ length: total }, (_, i) => {
+      const idx = String(i + 1).padStart(3, "0");
+      return `/AnimationHero/seq-scroll/HERO_QUEDA${idx}.webp`;
+    });
+    setSourcesScroll(localWebp);
+  }, []);
+
+  
   const p = Math.min(1, Math.max(0, progress));
-  const split = Math.min(0.95, Math.max(0.05, ratio)); // evita 0/1 extremos
-
-  // Primeiro trecho: seq-loop (HERO_LOOP) mapeado para [0..split]
-  const pLoop = split > 0 ? Math.min(1, Math.max(0, p / split)) : 0;
-  const showLoop = p < split;
-
-  // Segundo trecho: seq-scroll (HERO_QUEDA) mapeado para [split..1]
-  const pScroll = p <= split ? 0 : Math.min(1, Math.max(0, (p - split) / (1 - split)));
-  const showScroll = p >= split;
+  const pScroll = p;
+  const showScroll = true;
 
   return (
     <>
-      {/* Esteira com cubos – roda uma vez no início do scroll */}
-      <ImageSequenceLite
-        count={83}
-        fps={18}
-        dir="/AnimationHero/seq-loop"
-        base="HERO_LOOP"
-        pad={3}
-        ext="webp"
-        extCandidates={["webp", "png"]}
-        maxCache={2}
-        start={1}
-        progress={pLoop}
-        loops={1}
-        visible={visible && showLoop}
-        orient={orient}
-        fit={fit}
-        yPct={yPct}
-        zoom={zoom}
-      />
-
       {/* Sequência de scroll (queda) – continua após terminar a esteira */}
       <ImageSequenceLite
         count={214}
         fps={24}
-        dir="/AnimationHero/seq-scroll"
+        dir="/AnimationHero/seq-scroll" // dir não será usado quando 'sources' está preenchido, mas mantemos local por segurança
         base="HERO_QUEDA"
         pad={3}
-        ext="webp"
-        extCandidates={["webp", "png"]}
+        ext={'webp'}
+        // Evita tentar .avif enquanto não existir no disco/CDN
+        extCandidates={["webp"]}
+        sources={sourcesScroll}
         maxCache={2}
+        // Reduz concorrência e janela de prefetch para acelerar a aparição da seção
+        netProfileOverride={{ MAX_INFLIGHT: 4, WINDOW: 12 }}
+        prefetchWindow={10}
         start={1}
         progress={pScroll}
         loops={1}
-        visible={visible && showScroll}
+        visible={visible}
         orient={orient}
         fit={fit}
         yPct={yPct}
