@@ -52,7 +52,7 @@ export default function Hero() {
       const FADE_START_P = 0.0;                        // começa a desaparecer imediatamente
       const FADE_SPAN_P  = 0.08;                       // conclui o fade um pouco mais rápido
 
-      ctx = gsap.context(() => {
+      ctx = (gsap as any).context(() => {
         // 1) PIN do Hero (dirige Canvas + fade por progress)
         ScrollTrigger.create({
           trigger: el,
@@ -82,12 +82,10 @@ export default function Hero() {
 
             // === Fade sincronizado ao progress ===
             const p = s.progress; // 0 → 1
-            // normaliza para [0..1] a partir do FADE_START_P
             let t = (p - FADE_START_P) / FADE_SPAN_P;
             if (t < 0) t = 0;
             if (t > 1) t = 1;
 
-            // 1 → 0: opacidade; e leve subida (conteúdo principal)
             const alpha = 1 - t;
             gsap.set("#hero-content", { autoAlpha: alpha, yPercent: -6 * t });
 
@@ -95,19 +93,17 @@ export default function Hero() {
             const gridAlpha = HIDE_GRID ? 0 : alpha;
             gsap.set(".bg-grid", { autoAlpha: gridAlpha });
 
-            // desabilita clique enquanto está desvanecendo
             const hc = document.getElementById("hero-content");
             if (hc) hc.style.pointerEvents = alpha < 0.95 ? "none" : "auto";
 
             // === Fade das estatísticas (lógica inversa) ===
-            const STATS_START_P = 0.85; // começa a aparecer em 85%
-            const STATS_SPAN_P = 0.15;  // duração do fade (15% do progresso)
+            const STATS_START_P = 0.85;
+            const STATS_SPAN_P = 0.15;
 
             let statsT = (p - STATS_START_P) / STATS_SPAN_P;
             if (statsT < 0) statsT = 0;
             if (statsT > 1) statsT = 1;
 
-            // 0 → 1: opacidade das estatísticas
             const statsAlpha = statsT;
             gsap.set("#hero-stats", { autoAlpha: statsAlpha, yPercent: 6 * (1 - statsT) });
           },
@@ -119,13 +115,12 @@ export default function Hero() {
           ease: "none",
           scrollTrigger: { trigger: el, start: "top top", end: RANGE, scrub: SCRUB, markers: SHOW_MARKERS },
         });
-      }, el);
+      }, el as any);
     })();
 
     return () => ctx?.revert();
   }, [rangePct, scrubSmooth]); // <- sem 'showStats' aqui (usamos ref)
 
-  // Exibimos apenas a sequência de scroll
   const showScroll = true;
 
   return (
@@ -140,8 +135,7 @@ export default function Hero() {
         className="absolute inset-0 -z-10"
         style={{
           backgroundColor: "#010510",
-          backgroundImage:
-            'image-set(url("/AnimationHero/HERO_SPOT.webp") type("image/webp"), url("/AnimationHero/HERO_SPOT.png") type("image/png"))',
+          backgroundImage: 'url("/hero/fundo.png")',
           backgroundRepeat: "no-repeat",
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -160,7 +154,7 @@ export default function Hero() {
           margin: 0,
           padding: 0,
           overflow: "hidden",
-          zIndex: -1, // visível mas atrás do conteúdo
+          zIndex: -1,
           pointerEvents: "none",
         }}
       >
