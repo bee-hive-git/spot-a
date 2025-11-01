@@ -27,21 +27,13 @@ export default function Hero() {
   }, [showStats]);
 
   // ==== CONTROLES (pode mexer ao vivo) ====
-  const [rangePct, setRangePct] = useState(200);   // RANGE em %
-  const [fadeEndPct, setFadeEndPct] = useState(35); // mantido no painel (não usado no cálculo abaixo)
-  const [scrubSmooth, setScrubSmooth] = useState(0); // 0 = scrub 1:1; >0 = suavização (segundos)
-  const [showMarkers, setShowMarkers] = useState(false);
-  const [hideGrid, setHideGrid] = useState(true);
-  const [showDebug, setShowDebug] = useState(true);
+  const [rangePct, setRangePct] = useState(120);   // RANGE em % – menor para a próxima seção surgir mais rápido
+  const [scrubSmooth, setScrubSmooth] = useState(0.05); // suavização mais curta para reagir mais rápido ao scroll
+  // Simplificados: sem painel de debug, marcadores sempre ocultos e grid oculta
+  const SHOW_MARKERS = false;
+  const HIDE_GRID = true;
 
-  // Toggle painel no teclado (G)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "g") setShowDebug((s) => !s);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  // Removido painel de debug e toggle por teclado (G)
 
   useLayoutEffect(() => {
     let ctx: { revert: () => void } | null = null;
@@ -57,8 +49,8 @@ export default function Hero() {
       // ===== CONTROLES dinâmicos =====
       const RANGE = `+=${rangePct}%`;                  // tempo total do pin
       const SCRUB: true | number = scrubSmooth === 0 ? true : scrubSmooth;
-      const FADE_START_P = 0.005;                      // ponto em que o fade começa
-      const FADE_SPAN_P  = 0.10;                       // duração do fade no progresso
+      const FADE_START_P = 0.0;                        // começa a desaparecer imediatamente
+      const FADE_SPAN_P  = 0.08;                       // conclui o fade um pouco mais rápido
 
       ctx = gsap.context(() => {
         // 1) PIN do Hero (dirige Canvas + fade por progress)
@@ -71,7 +63,7 @@ export default function Hero() {
           pinSpacing: true,
           anticipatePin: 1,
           invalidateOnRefresh: true,
-          markers: showMarkers,
+          markers: SHOW_MARKERS,
           onUpdate: (s) => {
             // mantém sua seq-scroll
             setScrollP(s.progress);
@@ -100,7 +92,7 @@ export default function Hero() {
             gsap.set("#hero-content", { autoAlpha: alpha, yPercent: -6 * t });
 
             // grid pode ser ocultada pelo controle
-            const gridAlpha = hideGrid ? 0 : alpha;
+            const gridAlpha = HIDE_GRID ? 0 : alpha;
             gsap.set(".bg-grid", { autoAlpha: gridAlpha });
 
             // desabilita clique enquanto está desvanecendo
@@ -125,13 +117,13 @@ export default function Hero() {
         gsap.to("#hero-canvas-wrap", {
           yPercent: 8,
           ease: "none",
-          scrollTrigger: { trigger: el, start: "top top", end: RANGE, scrub: SCRUB, markers: showMarkers },
+          scrollTrigger: { trigger: el, start: "top top", end: RANGE, scrub: SCRUB, markers: SHOW_MARKERS },
         });
       }, el);
     })();
 
     return () => ctx?.revert();
-  }, [rangePct, scrubSmooth, showMarkers, hideGrid]); // <- sem 'showStats' aqui (usamos ref)
+  }, [rangePct, scrubSmooth]); // <- sem 'showStats' aqui (usamos ref)
 
   // Exibimos apenas a sequência de scroll
   const showScroll = true;
@@ -300,79 +292,7 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* ===== Painel de Controle (Debug) ===== */}
-      {false && showDebug && (
-        <div className="fixed bottom-4 right-4 z-[9999] w-[320px] rounded-xl border border-white/10 bg-black/70 p-4 text-white backdrop-blur-md shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <strong className="text-sm">Controles do Hero</strong>
-            <button
-              className="text-xs opacity-70 hover:opacity-100"
-              onClick={() => setShowDebug(false)}
-            >
-              fechar
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs flex items-center justify-between">
-              <span>RANGE (pin) — {rangePct}%</span>
-              <input
-                type="number"
-                className="w-16 bg-transparent border border-white/20 rounded px-1 text-right text-xs"
-                value={rangePct}
-                onChange={(e) => setRangePct(Math.max(40, Number(e.target.value) || 0))}
-              />
-            </label>
-            <input min={40} max={500} step={10} type="range" value={rangePct} onChange={(e) => setRangePct(Number(e.target.value))} className="w-full" />
-
-            <label className="text-xs flex items-center justify-between">
-              <span>FADE_END (texto) — {fadeEndPct}%</span>
-              <input
-                type="number"
-                className="w-16 bg-transparent border border-white/20 rounded px-1 text-right text-xs"
-                value={fadeEndPct}
-                onChange={(e) => setFadeEndPct(Math.max(5, Number(e.target.value) || 0))}
-              />
-            </label>
-            <input min={5} max={100} step={5} type="range" value={fadeEndPct} onChange={(e) => setFadeEndPct(Number(e.target.value))} className="w-full" />
-
-            <label className="text-xs flex items-center justify-between">
-              <span>SCRUB suavização — {scrubSmooth === 0 ? "1:1" : `${scrubSmooth}s`}</span>
-              <input
-                type="number"
-                className="w-16 bg-transparent border border-white/20 rounded px-1 text-right text-xs"
-                value={scrubSmooth}
-                onChange={(e) => setScrubSmooth(Math.max(0, Number(e.target.value) || 0))}
-              />
-            </label>
-            <input min={0} max={2} step={0.1} type="range" value={scrubSmooth} onChange={(e) => setScrubSmooth(Number(e.target.value))} className="w-full" />
-
-            <div className="flex items-center gap-3 text-xs">
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={showMarkers} onChange={(e) => setShowMarkers(e.target.checked)} />
-                markers
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={hideGrid} onChange={(e) => setHideGrid(e.target.checked)} />
-                esconder grid
-              </label>
-              <button
-                className="ml-auto rounded bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
-                onClick={() => { setRangePct(200); setFadeEndPct(35); setScrubSmooth(0); setShowMarkers(false); setHideGrid(true); }}
-              >
-                reset
-              </button>
-            </div>
-
-            <div className="mt-1 text-[10px] opacity-70 space-y-0.5">
-              <div><code>RANGE</code> =&nbsp;{`"+=${rangePct}%"`}</div>
-              <div><code>FADE_END</code> =&nbsp;{`"+=${fadeEndPct}%"`}</div>
-              <div><code>SCRUB</code> =&nbsp;{scrubSmooth === 0 ? "true (1:1)" : `${scrubSmooth}s`}</div>
-              <div>Pressione <b>G</b> para mostrar/ocultar este painel</div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Painel de debug removido para simplificar e reduzir peso de UI */}
 
       {/* ===== Estatísticas do Hero (aparecem no último frame) ===== */}
       <HeroStats
