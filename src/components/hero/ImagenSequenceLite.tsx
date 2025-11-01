@@ -14,8 +14,9 @@ type Props = {
   dir: string;
   base: string;
   pad?: number;
-  ext?: "webp" | "png" | "jpg";
-  extCandidates?: ("webp" | "png" | "jpg")[];
+  ext?: "webp" | "png" | "jpg" | "avif";
+  extCandidates?: ("webp" | "png" | "jpg" | "avif")[];
+  sources?: string[]; // optional list of absolute frame URLs; if provided, use sources[index] with fallback
   start?: number;
   progress?: number; // 0..1
   loops?: number;
@@ -24,6 +25,9 @@ type Props = {
   renderOrder?: number;
   size?: [number, number];
   maxCache?: number;
+  // Ajustes de performance
+  netProfileOverride?: { MAX_INFLIGHT?: number; WINDOW?: number };
+  prefetchWindow?: number;
   orient?: Orient;
   fit?: Fit;
   yPct?: number;
@@ -38,6 +42,7 @@ export default function ImagenSequenceLite({
   pad = 3,
   ext = "webp",
   extCandidates,
+  sources,
   start = 1,
   progress,
   loops = 1,
@@ -46,6 +51,8 @@ export default function ImagenSequenceLite({
   renderOrder = 0,
   size: planeSize = [16, 9],
   maxCache = 3,
+  netProfileOverride,
+  prefetchWindow,
   orient = "none",
   fit = "cover",
   yPct = 0,
@@ -59,13 +66,18 @@ export default function ImagenSequenceLite({
   const aliveRef = useRef(true);
   const inflightRef = useRef<Map<number, AbortController>>(new Map());
 
-  // URLs
+  // Build URL base respecting absolute or relative dir, trimming trailing slash
+  const isAbs = useMemo(() => dir.startsWith("http://") || dir.startsWith("https://"), [dir]);
+  const prefix = useMemo(() => (isAbs ? dir.replace(/\/$/, "") : `${dir}`.replace(/\/$/, "")), [dir, isAbs]);
+  const baseNameFor = useCallback(
+    (i: number) => `${prefix}/${base}${String(i).padStart(pad, "0")}`,
+    [prefix, base, pad]
+  );
+
+  // Precomputed base names (without extension) for each frame index
   const urls = useMemo(
-    () =>
-      Array.from({ length: count }, (_, i) =>
-        `${dir}/${base}${String(start + i).padStart(pad, "0")}`
-      ),
-    [count, dir, base, pad, start]
+    () => Array.from({ length: count }, (_, i) => baseNameFor(start + i)),
+    [count, baseNameFor, start]
   );
 
   // cleanup seguro (captura refs)
@@ -125,15 +137,17 @@ export default function ImagenSequenceLite({
     invalidate();
   }, [camera, viewport.width, viewport.height, fit, planeW, planeH, yPct, zoom, invalidate]);
 
-  // prefetch window
-  const getPrefetchWindow = useCallback((): number => {
+  // Perfil de rede → janela e concorrência
+  const getNetProfile = useCallback(() => {
     type NavigatorWithConn = Navigator & { connection?: { effectiveType?: string } };
-    const conn = (navigator as NavigatorWithConn).connection?.effectiveType;
-    if (!conn) return 1;
-    if (conn.includes("2g")) return 1;
-    if (conn.includes("3g")) return 1;
-    return 2;
-  }, []);
+    const et = (navigator as NavigatorWithConn).connection?.effectiveType || "4g";
+    const slow = /2g|3g/.test(et);
+    const defaults = { MAX_INFLIGHT: slow ? 3 : 6, WINDOW: slow ? 12 : 28 };
+    return {
+      MAX_INFLIGHT: netProfileOverride?.MAX_INFLIGHT ?? defaults.MAX_INFLIGHT,
+      WINDOW: netProfileOverride?.WINDOW ?? defaults.WINDOW,
+    };
+  }, [netProfileOverride]);
 
   // loadTexture
   const loadTexture = useCallback(
@@ -152,8 +166,8 @@ export default function ImagenSequenceLite({
       const candidates = extCandidates && extCandidates.length > 0 ? extCandidates : [ext];
       let tex: THREE.Texture | null = null;
 
-      const PREFETCH_CONCURRENCY_LIMIT = 1;
-      if (isPrefetch && inflightRef.current.size >= PREFETCH_CONCURRENCY_LIMIT) {
+      const { MAX_INFLIGHT } = getNetProfile();
+      if (isPrefetch && inflightRef.current.size >= MAX_INFLIGHT) {
         return null;
       }
 
@@ -161,8 +175,11 @@ export default function ImagenSequenceLite({
       inflightRef.current.set(idx, ac);
 
       try {
-        for (const ex of candidates) {
-          const url = `${name}.${ex}`;
+        // If caller provided explicit source URL for this frame, try it first
+        const explicit = Array.isArray(sources) && sources[idx] ? sources[idx] : null;
+        const tryList = explicit ? [explicit] : candidates.map((ex) => `${name}.${ex}`);
+
+        for (const url of tryList) {
           try {
             if ("createImageBitmap" in window) {
               const res = await fetch(url, { cache: "force-cache", signal: ac.signal });
@@ -212,7 +229,7 @@ export default function ImagenSequenceLite({
         inflightRef.current.delete(idx);
       }
     },
-    [urls, extCandidates, ext, maxCache]
+    [urls, extCandidates, ext, maxCache, sources, getNetProfile]
   );
 
   // showFrame
@@ -254,15 +271,27 @@ export default function ImagenSequenceLite({
   // prefetch
   const prefetchWindowFrom = useCallback(
     (idx: number) => {
-      const win = getPrefetchWindow();
-      for (let k = 1; k <= win; k++) {
-        const n = Math.min(count - 1, idx + k);
-        if (!cacheRef.current.has(n) && !inflightRef.current.has(n)) {
-          void loadTexture(n, true);
+      const { WINDOW } = getNetProfile();
+      const desired = prefetchWindow ?? WINDOW;
+      const limit = Math.max(0, Math.min(desired, count - 1));
+      const schedule = (fn: () => void) => {
+        if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+          
+          (window as any).requestIdleCallback(fn, { timeout: 100 });
+        } else {
+          setTimeout(fn, 0);
         }
-      }
+      };
+      schedule(() => {
+        for (let k = 1; k <= limit; k++) {
+          const n = Math.min(count - 1, idx + k);
+          if (!cacheRef.current.has(n) && !inflightRef.current.has(n)) {
+            void loadTexture(n, true);
+          }
+        }
+      });
     },
-    [count, getPrefetchWindow, loadTexture]
+    [count, getNetProfile, loadTexture, prefetchWindow]
   );
 
   // scrub
